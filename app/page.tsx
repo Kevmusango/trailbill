@@ -51,10 +51,10 @@ export default function LandingPage() {
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-4 leading-[1.1]">
             Clients pay better when
             <br />
-            <span className="text-primary">they commit first.</span>
+            <span className="text-primary">they choose a date.</span>
           </h1>
           <p className="text-base md:text-lg text-muted-foreground mb-6 max-w-xl mx-auto leading-relaxed">
-            TrailBill turns vague payment promises into chosen dates — with automatic follow-through built in. So you stop chasing.
+            That choice creates commitment. TrailBill handles the follow-through — so you stop chasing and focus on your business.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
             <Link
