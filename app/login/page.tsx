@@ -30,7 +30,7 @@ export default function LoginPage() {
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/change-password`,
+      redirectTo: `${window.location.origin}/api/auth/callback?next=/change-password`,
     });
     setLoading(false);
     if (error) { toast.error("Failed to send reset email"); return; }
