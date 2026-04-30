@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/resend";
 import { emailBase, fmtMoney } from "@/lib/email-template";
 import { getSastTimeWindow } from "@/lib/cron-utils";
 import { buildReminderWhatsAppMessage, sendWhatsAppTemplate } from "@/lib/whatsapp";
+import { sendSMS } from "@/lib/sms";
 
 const PRIMARY = "#0DA2E7";
 
@@ -120,17 +121,18 @@ export async function GET(request: Request) {
 
       const { data: reqRow } = await supabase
         .from("payment_requests")
-        .select("public_token, request_number, client_id, description, notification_channels, grace_end_date, late_fee_pct, base_amount, amount_paid, total_due, clients(name, email, phone)")
+        .select("public_token, request_number, client_id, description, notification_channels, grace_end_date, late_fee_pct, base_amount, amount_paid, total_due, clients(name, email, phone, sms_number)")
         .eq("id", reminder.request_id)
         .single();
 
       if (!reqRow) continue;
-      const client = reqRow.clients as unknown as { name: string; email: string | null; phone: string | null } | null;
+      const client = reqRow.clients as unknown as { name: string; email: string | null; phone: string | null; sms_number: string | null } | null;
       const channel = reqRow.notification_channels ?? "";
-      const shouldSendEmail = reminder.should_send_email ?? ["email", "both"].includes(channel);
-      const shouldSendWhatsApp = reminder.should_send_whatsapp ?? ["whatsapp", "both"].includes(channel);
+      const shouldSendEmail = reminder.should_send_email ?? ["email", "both", "email+sms", "all"].includes(channel);
+      const shouldSendWhatsApp = reminder.should_send_whatsapp ?? ["whatsapp", "both", "whatsapp+sms", "all"].includes(channel);
+      const shouldSendSMS = reminder.should_send_sms ?? ["sms", "email+sms", "whatsapp+sms", "all"].includes(channel);
 
-      if (!shouldSendEmail && !shouldSendWhatsApp) {
+      if (!shouldSendEmail && !shouldSendWhatsApp && !shouldSendSMS) {
         totalSkipped++;
         continue;
       }
@@ -225,6 +227,30 @@ export async function GET(request: Request) {
           });
           totalSent++;
           sentThisReminder = true;
+        }
+      }
+
+      if (shouldSendSMS) {
+        const smsTo = client?.sms_number || client?.phone;
+        if (smsTo) {
+          const isOverdue = ["1_day_after", "3_days_after", "7_days_after"].includes(reminder.reminder_type);
+          const smsText = isOverdue
+            ? `Hi ${client!.name}, ${biz.name} is following up on your outstanding payment of ${fmtMoney(sendAmount)}. View & pay: ${payUrl}`
+            : `Hi ${client!.name}, reminder from ${biz.name}: payment of ${fmtMoney(sendAmount)} is due soon. View: ${payUrl}`;
+          const smsResult = await sendSMS({ to: smsTo, message: smsText });
+          if (smsResult.sent) {
+            await supabase.from("reminder_log").insert({
+              request_id:    reminder.request_id,
+              client_id:     reqRow.client_id,
+              business_id:   biz.id,
+              channel:       "sms",
+              reminder_type: reminder.reminder_type,
+              status:        "sent",
+              sent_at:       new Date().toISOString(),
+            });
+            totalSent++;
+            sentThisReminder = true;
+          }
         }
       }
 
